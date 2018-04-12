@@ -7,9 +7,9 @@ import javax.net.ssl.*
 import kotlin.coroutines.experimental.*
 
 suspend fun ReadWriteSocket.tls(
-        trustManager: X509TrustManager? = null,
-        serverName: String? = null,
-        coroutineContext: CoroutineContext = ioCoroutineDispatcher
+    trustManager: X509TrustManager? = null,
+    serverName: String? = null,
+    coroutineContext: CoroutineContext = ioCoroutineDispatcher
 ): ReadWriteSocket {
     val session = TLSClientSession(openReadChannel(), openWriteChannel(), trustManager, serverName, coroutineContext)
     val socket = ReadWriteImpl(session, this)
@@ -26,14 +26,14 @@ suspend fun ReadWriteSocket.tls(
 }
 
 suspend fun Socket.tls(
-        trustManager: X509TrustManager? = null,
-        randomAlgorithm: String = "NativePRNGNonBlocking",
-        serverName: String? = null,
-        coroutineContext: CoroutineContext = ioCoroutineDispatcher
+    trustManager: X509TrustManager? = null,
+    randomAlgorithm: String = "NativePRNGNonBlocking",
+    serverName: String? = null,
+    coroutineContext: CoroutineContext = ioCoroutineDispatcher
 ): Socket {
     val session = TLSClientSession(
-            openReadChannel(), openWriteChannel(),
-            trustManager, serverName, coroutineContext, randomAlgorithm
+        openReadChannel(), openWriteChannel(),
+        trustManager, serverName, coroutineContext, randomAlgorithm
     )
 
     val socket = TLSSocketImpl(session, this)
@@ -54,7 +54,8 @@ private class TLSSocketImpl(val session: TLSClientSession, val delegate: Socket)
     override fun attachForWriting(channel: ByteChannel): ReaderJob = session.attachForWriting(channel)
 }
 
-private class ReadWriteImpl(val session: TLSClientSession, val delegate: ReadWriteSocket) : ReadWriteSocket by delegate {
+private class ReadWriteImpl(val session: TLSClientSession, val delegate: ReadWriteSocket) :
+    ReadWriteSocket by delegate {
     override fun attachForReading(channel: ByteChannel): WriterJob = session.attachForReading(channel)
     override fun attachForWriting(channel: ByteChannel): ReaderJob = session.attachForWriting(channel)
 }

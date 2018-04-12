@@ -7,7 +7,12 @@ import javax.crypto.*
 import javax.crypto.spec.*
 
 
-internal fun encryptCipher(suite: CipherSuite, keyMaterial: ByteArray, recordType: TLSRecordType, recordLength: Int, recordIv: Long, seq: Long): Cipher {
+internal fun encryptCipher(
+    suite: CipherSuite,
+    keyMaterial: ByteArray,
+    recordType: TLSRecordType,
+    recordLength: Int, recordIv: Long, seq: Long
+): Cipher {
     val cipher = Cipher.getInstance(suite.jdkCipherName)
 
     val key = keyMaterial.clientKey(suite)
@@ -43,7 +48,12 @@ internal fun encryptCipher(suite: CipherSuite, keyMaterial: ByteArray, recordTyp
     return cipher
 }
 
-internal fun decryptCipher(suite: CipherSuite, keyMaterial: ByteArray, recordType: TLSRecordType, recordLength: Int, recordIv: Long, seq: Long): Cipher {
+internal fun decryptCipher(
+    suite: CipherSuite,
+    keyMaterial: ByteArray,
+    recordType: TLSRecordType,
+    recordLength: Int, recordIv: Long, seq: Long
+): Cipher {
     val cipher = Cipher.getInstance(suite.jdkCipherName)
 
     val key = keyMaterial.serverKey(suite)

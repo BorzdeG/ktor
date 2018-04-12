@@ -14,12 +14,12 @@ import javax.net.ssl.*
 import kotlin.coroutines.experimental.*
 
 internal class TLSClientSession(
-        val input: ByteReadChannel,
-        val output: ByteWriteChannel,
-        val trustManager: X509TrustManager? = null,
-        val serverName: String? = null,
-        val coroutineContext: CoroutineContext,
-        randomAlgorithm: String = "NativePRNGNonBlocking"
+    val input: ByteReadChannel,
+    val output: ByteWriteChannel,
+    val trustManager: X509TrustManager? = null,
+    val serverName: String? = null,
+    val coroutineContext: CoroutineContext,
+    randomAlgorithm: String = "NativePRNGNonBlocking"
 ) : AReadable, AWritable {
     private var readerJob: ReaderJob? = null
     private var writerJob: WriterJob? = null
@@ -124,7 +124,8 @@ internal class TLSClientSession(
             when (recordHeader.type) {
                 TLSRecordType.ApplicationData -> {
                     val recordIv = encrypted.readLong()
-                    val cipher = decryptCipher(cipherSuite!!, keyMaterial, recordHeader.type, recordHeader.length, recordIv, seq)
+                    val cipher =
+                        decryptCipher(cipherSuite!!, keyMaterial, recordHeader.type, recordHeader.length, recordIv, seq)
                     val packet = encrypted.decrypted(cipher)
 
                     pipe.writePacket(packet)
@@ -132,7 +133,8 @@ internal class TLSClientSession(
                 }
                 TLSRecordType.Alert -> {
                     val recordIv = encrypted.readLong()
-                    val cipher = decryptCipher(cipherSuite!!, keyMaterial, recordHeader.type, recordHeader.length, recordIv, seq)
+                    val cipher =
+                        decryptCipher(cipherSuite!!, keyMaterial, recordHeader.type, recordHeader.length, recordIv, seq)
                     val packet = encrypted.decrypted(cipher)
 
                     val fatal = packet.readByte() == 2.toByte()
@@ -219,7 +221,8 @@ internal class TLSClientSession(
     private suspend fun receiveHandshakeFinished() {
         val encryptedPacket = readRecord()
         val recordIv = encryptedPacket.readLong()
-        val cipher = decryptCipher(cipherSuite!!, keyMaterial, TLSRecordType.Handshake, recordHeader.length, recordIv, 0)
+        val cipher =
+            decryptCipher(cipherSuite!!, keyMaterial, TLSRecordType.Handshake, recordHeader.length, recordIv, 0)
         val decrypted = encryptedPacket.decrypted(cipher)
 
         val body = decrypted.readTLSHandshake(handshakeHeader).readBytes()
@@ -243,7 +246,7 @@ internal class TLSClientSession(
             TLSHandshakeType.ServerHello -> {
                 packet.readTLSServerHello(handshakeHeader)
                 serverRandom = handshakeHeader.random.copyOf()
-                cipherSuite = CipherSuites[handshakeHeader.suites[0]]
+                cipherSuite = SupportedCiphers.SUITES[handshakeHeader.suites[0]]
             }
             TLSHandshakeType.Certificate -> {
                 val certs = packet.readTLSCertificate(handshakeHeader)
@@ -255,7 +258,11 @@ internal class TLSClientSession(
                     tm.checkServerTrusted(x509s.toTypedArray(), "RSA")
                 }
 
-                serverKey = certs.firstOrNull()?.publicKey ?: throw TLSException("No server certificate/public key found")
+                serverKey = certs.firstOrNull()?.publicKey ?:
+                        throw TLSException("No server certificate/public key found")
+            }
+            TLSHandshakeType.CertificateRequest -> {
+
             }
             TLSHandshakeType.ServerDone -> {
                 preSecret = random.generateSeed(48)
@@ -291,7 +298,13 @@ internal class TLSClientSession(
                 }
 
                 handshakesPacket.writePacket(finished.copy())
-                keyMaterial = keyMaterial(masterSecret!!, serverRandom + clientRandom, suite.keyStrengthInBytes, suite.macStrengthInBytes, suite.fixedIvLength)
+                keyMaterial = keyMaterial(
+                    masterSecret!!,
+                    serverRandom + clientRandom,
+                    suite.keyStrengthInBytes,
+                    suite.macStrengthInBytes,
+                    suite.fixedIvLength
+                )
 
                 val cipher = encryptCipher(suite, keyMaterial, TLSRecordType.Handshake, finished.remaining, 0, 0)
                 val finishedEncrypted = finished.encrypted(cipher, 0)
@@ -317,7 +330,12 @@ internal class TLSClientSession(
         return tm.first { it is X509TrustManager } as X509TrustManager
     }
 
-    private fun clientKeyExchange(random: SecureRandom, handshake: TLSHandshakeHeader, publicKey: PublicKey, preSecret: ByteArray): ByteReadPacket {
+    private fun clientKeyExchange(
+        random: SecureRandom,
+        handshake: TLSHandshakeHeader,
+        publicKey: PublicKey,
+        preSecret: ByteArray
+    ): ByteReadPacket {
         require(preSecret.size == 48)
 
         val secretPacket = WritePacket()
@@ -336,8 +354,11 @@ internal class TLSClientSession(
     private suspend fun sendClientHello() {
         with(handshakeHeader) {
             type = TLSHandshakeType.ClientHello
-            suitesCount = 1
-            suites[0] = TLS_RSA_WITH_AES_128_GCM_SHA256.code
+            suitesCount = SupportedCiphers.SUITES.size
+            SupportedCiphers.SUITES.values.forEachIndexed { index, suite ->
+                suites[index] = suite.code
+            }
+
             random = clientRandom.copyOf()
         }
 

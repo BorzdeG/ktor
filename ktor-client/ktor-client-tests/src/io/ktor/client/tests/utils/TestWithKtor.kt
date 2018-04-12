@@ -13,7 +13,7 @@ abstract class TestWithKtor {
     protected val serverPort: Int = ServerSocket(0).use { it.localPort }
 
     init {
-        (LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as? Logger)?.level = Level.ERROR
+        (LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as? Logger)?.level = Level.ALL
     }
 
     @Before

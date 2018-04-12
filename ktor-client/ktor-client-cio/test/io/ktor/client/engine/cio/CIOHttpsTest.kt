@@ -10,6 +10,7 @@ import io.ktor.http.*
 import io.ktor.response.*
 import io.ktor.routing.*
 import io.ktor.server.engine.*
+import io.ktor.server.jetty.*
 import io.ktor.server.netty.*
 import io.ktor.util.*
 import kotlinx.coroutines.experimental.*
@@ -17,6 +18,7 @@ import org.junit.*
 import org.junit.Test
 import java.io.*
 import java.security.*
+import javax.crypto.*
 import javax.net.ssl.*
 import kotlin.test.*
 

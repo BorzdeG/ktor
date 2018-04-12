@@ -21,7 +21,13 @@ import java.util.*
  * A generated certificate will have 3 days validity period and 1024-bits key strength.
  * Only localhost and 127.0.0.1 domains are valid with the certificate.
  */
-fun generateCertificate(file: File, algorithm: String = "SHA1withRSA", keyAlias: String = "mykey", keyPassword: String = "changeit", jksPassword: String = keyPassword): KeyStore {
+fun generateCertificate(
+    file: File,
+    algorithm: String = "SHA1withRSA",
+    keyAlias: String = "mykey",
+    keyPassword: String = "changeit",
+    jksPassword: String = keyPassword
+): KeyStore {
     val daysValid: Long = 3
     val jks = KeyStore.getInstance("JKS")!!
     jks.load(null, null)
@@ -30,18 +36,23 @@ fun generateCertificate(file: File, algorithm: String = "SHA1withRSA", keyAlias:
     keyPairGenerator.initialize(1024)
     val keyPair = keyPairGenerator.genKeyPair()!!
 
-    val id = Counterparty(country = "RU", organization = "JetBrains", organizationUnit = "Kotlin", commonName = "localhost")
+    val id = Counterparty(
+        country = "RU", organization = "JetBrains", organizationUnit = "Kotlin", commonName = "localhost"
+    )
+
     val from = Date()
     val to = Date.from(LocalDateTime.now().plusDays(daysValid).atZone(ZoneId.systemDefault()).toInstant())
 
 
     val certificateBytes = buildPacket {
-        writeCertificate(issuer = id, subject = id,
-                keyPair = keyPair,
-                algorithm = algorithm,
-                from = from, to = to,
-                domains = listOf("localhost"),
-                ipAddresses = listOf(Inet4Address.getByName("127.0.0.1")))
+        writeCertificate(
+            issuer = id, subject = id,
+            keyPair = keyPair,
+            algorithm = algorithm,
+            from = from, to = to,
+            domains = listOf("localhost"),
+            ipAddresses = listOf(Inet4Address.getByName("127.0.0.1"))
+        )
     }.readBytes()
 
     val cert = CertificateFactory.getInstance("X.509").generateCertificate(certificateBytes.inputStream())
@@ -74,18 +85,22 @@ private data class OID(val identifier: String) {
     }
 }
 
-private data class Counterparty(val country: String = "",
-                                val organization: String = "",
-                                val organizationUnit: String = "",
-                                val commonName: String = "")
+private data class Counterparty(
+    val country: String = "",
+    val organization: String = "",
+    val organizationUnit: String = "",
+    val commonName: String = ""
+)
 
-private fun BytePacketBuilder.writeX509Info(issuer: Counterparty,
-                                            subject: Counterparty,
-                                            publicKey: RSAPublicKey,
-                                            from: Date,
-                                            to: Date,
-                                            domains: List<String>,
-                                            ipAddresses: List<InetAddress>) {
+private fun BytePacketBuilder.writeX509Info(
+    issuer: Counterparty,
+    subject: Counterparty,
+    publicKey: RSAPublicKey,
+    from: Date,
+    to: Date,
+    domains: List<String>,
+    ipAddresses: List<InetAddress>
+) {
 
     val version = BigInteger(64, SecureRandom())
 
@@ -121,12 +136,14 @@ private fun BytePacketBuilder.writeX509Info(issuer: Counterparty,
                     writeDerOctetString {
                         writeDerSequence {
                             for (domain in domains) {
-                                writeX509Extension(2) { // DNSName
+                                writeX509Extension(2) {
+                                    // DNSName
                                     writeFully(domain.toByteArray())
                                 }
                             }
                             for (ip in ipAddresses) {
-                                writeX509Extension(7) { // IP address
+                                writeX509Extension(7) {
+                                    // IP address
                                     writeFully(ip.address)
                                 }
                             }
@@ -181,13 +198,15 @@ private fun BytePacketBuilder.writeX509NamePart(id: OID, value: String) {
     }
 }
 
-private fun BytePacketBuilder.writeCertificate(issuer: Counterparty,
-                                               subject: Counterparty,
-                                               keyPair: KeyPair,
-                                               algorithm: String,
-                                               from: Date, to: Date,
-                                               domains: List<String>,
-                                               ipAddresses: List<InetAddress>) {
+private fun BytePacketBuilder.writeCertificate(
+    issuer: Counterparty,
+    subject: Counterparty,
+    keyPair: KeyPair,
+    algorithm: String,
+    from: Date, to: Date,
+    domains: List<String>,
+    ipAddresses: List<InetAddress>
+) {
     require(to.after(from))
 
     val certInfo = buildPacket {
@@ -246,11 +265,17 @@ private fun BytePacketBuilder.writeDerBitString(array: ByteArray, unused: Int = 
 }
 
 private fun BytePacketBuilder.writeDerUTCTime(date: Date) {
-    writeDerUTF8String(SimpleDateFormat("yyMMddHHmmss'Z'").apply { timeZone = TimeZone.getTimeZone("UTC") }.format(date), 0x17)
+    writeDerUTF8String(SimpleDateFormat("yyMMddHHmmss'Z'").apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }.format(date), 0x17)
 }
 
 private fun BytePacketBuilder.writeDerGeneralizedTime(date: Date) {
-    writeDerUTF8String(SimpleDateFormat("yyyyMMddHHmmss'Z'").apply { timeZone = TimeZone.getTimeZone("UTC") }.format(date), 0x18)
+    writeDerUTF8String(
+        SimpleDateFormat("yyyyMMddHHmmss'Z'").apply { timeZone = TimeZone.getTimeZone("UTC") }.format(
+            date
+        ), 0x18
+    )
 }
 
 private fun BytePacketBuilder.writeDerUTF8String(s: String, type: Int = 0x0c) {
