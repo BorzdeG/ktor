@@ -21,3 +21,17 @@ enum class TLSHandshakeType(val code: Int) {
         } ?: throw IllegalArgumentException("Invalid TLS handshake type code: $code")
     }
 }
+
+enum class ServerKeyExchangeType(val code: Int) {
+    ExplicitPrime(1),
+    ExplicitChar(2),
+    NamedCurve(3);
+
+    companion object {
+        private val byCode = Array(256) { idx -> values().firstOrNull() { it.code == idx } }
+        fun byCode(code: Int): ServerKeyExchangeType {
+            val result = if (code in 0..0xff) byCode[code] else null
+            return result ?: throw IllegalArgumentException("Invalid TLS ServerKeyExchange type code: $code")
+        }
+    }
+}

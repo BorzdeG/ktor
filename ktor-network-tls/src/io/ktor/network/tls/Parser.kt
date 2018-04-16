@@ -1,5 +1,6 @@
 package io.ktor.network.tls
 
+import io.ktor.network.tls.ec.*
 import kotlinx.coroutines.experimental.channels.*
 import kotlinx.coroutines.experimental.io.*
 import kotlinx.io.core.*
@@ -7,17 +8,19 @@ import java.io.*
 import java.security.cert.*
 import kotlin.experimental.*
 
-suspend fun ByteReadChannel.readTLSRecordHeader(header: TLSRecordHeader): Boolean {
+suspend fun ByteReadChannel.readTLSRecord(header: TLSRecord): Boolean {
     val typeCode = try { readByte().toInt() and 0xff } catch (t: ClosedReceiveChannelException) { return false }
     header.type = TLSRecordType.byCode(typeCode)
     header.version = readTLSVersion()
     header.length = readShort().toInt() and 0xffff
 
     if (header.length > MAX_TLS_FRAME_SIZE) throw TLSException("Illegal TLS frame size: ${header.length}")
+
+    header.packet = readPacket(header.length)
     return true
 }
 
-suspend fun ByteReadChannel.readTLSHandshake(header: TLSRecordHeader, handshake: TLSHandshakeHeader) {
+suspend fun ByteReadChannel.readTLSHandshake(header: TLSRecord, handshake: TLSHandshakeHeader) {
     if (header.type !== TLSRecordType.Handshake) throw TLSException("Expected TLS handshake but got ${header.type}")
 
     val v = readInt()
@@ -36,40 +39,42 @@ fun ByteReadPacket.readTLSHandshake(handshake: TLSHandshakeHeader): ByteReadPack
     }
 }
 
-suspend fun ByteReadChannel.readTLSClientHello(header: TLSRecordHeader, handshake: TLSHandshakeHeader) {
+suspend fun ByteReadChannel.readTLSClientHello(header: TLSRecord, handshake: TLSHandshakeHeader) {
     readTLSHandshake(header, handshake)
-    val p = readPacket(handshake.length)
+    val packet = readPacket(handshake.length)
 
     if (handshake.type !== TLSHandshakeType.ClientHello) throw TLSException("Expected TLS handshake ClientHello but got ${handshake.type}")
 
-    handshake.version = p.readTLSVersion()
-    p.readFully(handshake.random)
-    val sessionIdLength = p.readByte().toInt() and 0xff
+    handshake.version = packet.readTLSVersion()
+    packet.readFully(handshake.random)
+    val sessionIdLength = packet.readByte().toInt() and 0xff
 
     if (sessionIdLength > 32) throw TLSException("sessionId length limit of 32 bytes exceeded: $sessionIdLength specified")
     handshake.sessionIdLength = sessionIdLength
-    p.readFully(handshake.sessionId, 0, sessionIdLength)
+    packet.readFully(handshake.sessionId, 0, sessionIdLength)
 
-    val cipherSuitesSize = p.readShort().toInt() and 0xffff
+    val cipherSuitesSize = packet.readShort().toInt() and 0xffff
     val suitesCount = cipherSuitesSize / 2
 
-    val suites = if (suitesCount > 255) ShortArray(cipherSuitesSize / 2).also { handshake.suites = it } else handshake.suites
+    val suites = if (suitesCount > 255) ShortArray(cipherSuitesSize / 2)
+        .also { handshake.suites = it } else handshake.suites
+
     handshake.suitesCount = suitesCount
 
     for (i in 0 until suites.size) {
-        suites[i] = p.readShort()
+        suites[i] = packet.readShort()
     }
 
-    p.discardExact(2) // skip compression
+    packet.discardExact(2) // skip compression
 
-    if (p.remaining > 0) {
-        val extensionsLength = p.readShort().toInt() and 0xffff
-        p.discardExact(extensionsLength)
+    if (packet.remaining > 0) {
+        val extensionsLength = packet.readShort().toInt() and 0xffff
+        packet.discardExact(extensionsLength)
 
         // TODO TLS extensions
     }
 
-    if (p.remaining > 0) {
+    if (packet.remaining > 0) {
         throw TLSException("TLS handshake extra bytes found")
     }
 }
@@ -100,6 +105,19 @@ fun ByteReadPacket.readTLSServerHello(handshake: TLSHandshakeHeader) {
 
     if (remaining > 0) {
         throw TLSException("TLS handshake ServerHello extra bytes")
+    }
+}
+
+fun ByteReadPacket.readTLSServerKeyExchange() {
+    val type = readByte().toInt() and 0xff
+    when (ServerKeyExchangeType.byCode(type)) {
+        ServerKeyExchangeType.NamedCurve -> {
+            val curveId = readShort().toInt() and 0xffff
+
+            check(SupportedNamedCurves.isValid(curveId))
+        }
+        ServerKeyExchangeType.ExplicitPrime -> TODO()
+        ServerKeyExchangeType.ExplicitChar -> TODO()
     }
 }
 
