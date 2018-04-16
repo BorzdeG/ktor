@@ -1,6 +1,7 @@
 package io.ktor.util
 
 import kotlinx.io.core.*
+import sun.security.util.*
 import java.io.*
 import java.math.*
 import java.net.*
@@ -26,14 +27,15 @@ fun generateCertificate(
     algorithm: String = "SHA1withRSA",
     keyAlias: String = "mykey",
     keyPassword: String = "changeit",
-    jksPassword: String = keyPassword
+    jksPassword: String = keyPassword,
+    keySizeInBits: Int = 1024
 ): KeyStore {
     val daysValid: Long = 3
     val jks = KeyStore.getInstance("JKS")!!
     jks.load(null, null)
 
-    val keyPairGenerator = KeyPairGenerator.getInstance("RSA")!!
-    keyPairGenerator.initialize(1024)
+    val keyPairGenerator = KeyPairGenerator.getInstance(keysGenerationAlgorithm(algorithm))!!
+    keyPairGenerator.initialize(keySizeInBits)
     val keyPair = keyPairGenerator.genKeyPair()!!
 
     val id = Counterparty(
@@ -70,21 +72,6 @@ fun generateCertificate(
     return jks
 }
 
-private data class OID(val identifier: String) {
-    val asArray: IntArray = identifier.split(".", " ").map { it.trim().toInt() }.toIntArray()
-
-    companion object {
-        val OrganizationName = OID("2.5.4.10")
-        val OrganizationalUnitName = OID("2.5.4.11")
-        val CountryName = OID("2.5.4.6")
-        val CommonName = OID("2.5.4.3")
-        val SubjectAltName = OID("2.5.29.17")
-
-        val Sha1withRSAEncryption = OID("1.2.840.113549.1.1.5")
-        val RSAEncryption = OID("1 2 840 113549 1 1 1")
-    }
-}
-
 private data class Counterparty(
     val country: String = "",
     val organization: String = "",
@@ -93,9 +80,10 @@ private data class Counterparty(
 )
 
 private fun BytePacketBuilder.writeX509Info(
+    algorithm: String,
     issuer: Counterparty,
     subject: Counterparty,
-    publicKey: RSAPublicKey,
+    publicKey: PublicKey,
     from: Date,
     to: Date,
     domains: List<String>,
@@ -107,25 +95,17 @@ private fun BytePacketBuilder.writeX509Info(
     writeDerSequence {
         writeVersion(2) // v3
         writeAsnInt(version) // certificate version
-        writeDerSequence {
-            writeDerObjectIdentifier(OID.Sha1withRSAEncryption)
-            writeDerNull()
-        }
+
+        writeAlgorithmIdentifier(algorithm)
+
         writeX509Counterparty(issuer)
         writeDerSequence {
             writeDerUTCTime(from)
             writeDerGeneralizedTime(to)
         }
         writeX509Counterparty(subject)
-        writeDerSequence {
-            writeDerSequence {
-                writeDerObjectIdentifier(OID.RSAEncryption)
-                writeDerNull()
-            }
-            writeDerBitString {
-                writeX509RSAPublicKey(publicKey)
-            }
-        }
+
+        writeFully(publicKey.encoded)
 
         writeByte(0xa3.toByte())
         val extensions = buildPacket {
@@ -158,6 +138,14 @@ private fun BytePacketBuilder.writeX509Info(
     }
 }
 
+private fun BytePacketBuilder.writeAlgorithmIdentifier(algorithm: String) {
+    writeDerSequence {
+        val oid = OID.fromAlgorithm(algorithm)
+        writeDerObjectIdentifier(oid)
+        writeDerNull()
+    }
+}
+
 private fun BytePacketBuilder.writeX509Extension(id: Int, builder: BytePacketBuilder.() -> Unit) {
     writeByte((0x80 or id).toByte())
     val packet = buildPacket { builder() }
@@ -165,10 +153,22 @@ private fun BytePacketBuilder.writeX509Extension(id: Int, builder: BytePacketBui
     writePacket(packet)
 }
 
-private fun BytePacketBuilder.writeX509RSAPublicKey(key: RSAPublicKey) {
-    writeDerSequence {
-        writeAsnInt(key.modulus)
-        writeAsnInt(key.publicExponent)
+
+private fun BytePacketBuilder.writeAlgorithmParameters(key: PublicKey) {
+    if (key !is ECPublicKey) {
+        writeDerNull()
+        return
+    }
+
+    writeDerObjectIdentifier(OID.secp256r1)
+}
+
+private fun BytePacketBuilder.writeX509NamePart(id: OID, value: String) {
+    writeDerSet {
+        writeDerSequence {
+            writeDerObjectIdentifier(id)
+            writeDerUTF8String(value)
+        }
     }
 }
 
@@ -189,15 +189,6 @@ private fun BytePacketBuilder.writeX509Counterparty(counterparty: Counterparty) 
     }
 }
 
-private fun BytePacketBuilder.writeX509NamePart(id: OID, value: String) {
-    writeDerSet {
-        writeDerSequence {
-            writeDerObjectIdentifier(id)
-            writeDerUTF8String(value)
-        }
-    }
-}
-
 private fun BytePacketBuilder.writeCertificate(
     issuer: Counterparty,
     subject: Counterparty,
@@ -210,7 +201,7 @@ private fun BytePacketBuilder.writeCertificate(
     require(to.after(from))
 
     val certInfo = buildPacket {
-        writeX509Info(issuer, subject, keyPair.public as RSAPublicKey, from, to, domains, ipAddresses)
+        writeX509Info(algorithm, issuer, subject, keyPair.public, from, to, domains, ipAddresses)
     }
 
     val certInfoBytes = certInfo.readBytes()
@@ -222,7 +213,7 @@ private fun BytePacketBuilder.writeCertificate(
     writeDerSequence {
         writeFully(certInfoBytes)
         writeDerSequence {
-            writeDerObjectIdentifier(OID.Sha1withRSAEncryption)
+            writeDerObjectIdentifier(OID.fromAlgorithm(algorithm))
             writeDerNull()
         }
         writeDerBitString(signed)

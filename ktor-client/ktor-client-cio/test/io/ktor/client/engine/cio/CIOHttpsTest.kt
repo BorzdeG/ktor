@@ -48,7 +48,7 @@ class CIOHttpsTest : TestWithKtor() {
         @BeforeClass
         @JvmStatic
         fun setupAll() {
-            keyStore = generateCertificate(keyStoreFile)
+            keyStore = generateCertificate(keyStoreFile, algorithm = "SHA384withECDSA", keySizeInBits = 256)
             val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
             tmf.init(keyStore)
             sslContext = SSLContext.getInstance("TLS")
