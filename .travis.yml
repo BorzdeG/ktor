@@ -1,0 +1,21 @@
+language: java
+
+jdk:
+  - oraclejdk8
+  - oraclejdk14
+
+install:
+  - ./gradlew -version
+
+before_script:
+  - ./gradlew clean assemble
+
+jobs:
+  include:
+    - stage: test
+      script:
+        - ./gradlew check
+
+    - stage: test
+      script:
+        - ./gradlew check --no-parallel
