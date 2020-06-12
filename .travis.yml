@@ -12,13 +12,29 @@ jobs:
       os: osx
       osx_image: xcode9.3
       jdk: openjdk8
+      env:
+        GRADLE_OPTS="--parallel"
       script:
-        - ./gradlew check --parallel
+        - ./gradlew check
+
+    - stage: test
+      dist: trusty
+      addons:
+        apt:
+          packages:
+            - openjdk-6-jdk
+      jdk: openjdk6
+      env:
+        GRADLE_OPTS="--parallel"
+      script:
+        - ./gradlew check
 
     - stage: test
       jdk: openjdk8
+      env:
+        GRADLE_OPTS="--parallel"
       script:
-        - ./gradlew check --parallel
+        - ./gradlew check
 
 #    - stage: test
 #      jdk: openjdk14
@@ -29,13 +45,29 @@ jobs:
       os: osx
       osx_image: xcode9.3
       jdk: openjdk8
+      env:
+        GRADLE_OPTS="--no-parallel"
       script:
-        - ./gradlew check --no-parallel
+        - ./gradlew check
 
     - stage: test
       jdk: openjdk8
+      env:
+        GRADLE_OPTS="--no-parallel"
       script:
-        - ./gradlew check --no-parallel
+        - ./gradlew check
+
+    - stage: test
+      dist: trusty
+      addons:
+        apt:
+          packages:
+            - openjdk-6-jdk
+      jdk: openjdk6
+      env:
+        GRADLE_OPTS="--no-parallel"
+      script:
+        - ./gradlew check
 
 #    - stage: test
 #      jdk: openjdk14
